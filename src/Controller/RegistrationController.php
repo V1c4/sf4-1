@@ -81,11 +81,32 @@ class RegistrationController extends AbstractController
     /**
      * @Route("/user-confirmation/{id}/{token}", name="user_confirmation")
      *
-     * @param User $user    L'utilisateur qui tente de confirmer son compte
-     * @param      $token   Le jeton à vérifier pour confirmer le compte
+     * @param User                   $user          L'utilisateur qui tente de confirmer son compte
+     * @param                        $token         Le jeton à vérifier pour confirmer le compte
+     * @param EntityManagerInterface $entityManager Pour mettre à jour l'utilisateur
      */
-    public function confirmAccount(User $user, $token)
+    public function confirmAccount(User $user, $token, EntityManagerInterface $entityManager)
     {
-        dd($user, $token);
+        // L'utilisateur a déjà confirmé son compte
+        if ($user->getIsConfirmed()) {
+            $this->addFlash('warning', 'Votre compte est déjà confirmé, vous pouvez vous connecter.');
+            return $this->redirectToRoute('app_login');
+        }
+
+        // Le jeton ne correspond pas à celui de l'utilisateur
+        if ($user->getSecurityToken() !== $token) {
+            $this->addFlash('danger', 'Le jeton de sécurité est invalide.');
+            return $this->redirectToRoute('app_login');
+        }
+
+        // Le jeton est valide: mettre à jour le jeton et confirmer le compte
+        $user->setIsConfirmed(true);
+        $user->renewToken();
+
+        $entityManager->persist($user);
+        $entityManager->flush();
+
+        $this->addFlash('success', 'Votre compte est confirmé, vous pouvez vous connecter.');
+        return $this->redirectToRoute('app_login');
     }
 }
