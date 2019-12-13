@@ -21,6 +21,9 @@
                 <div class="notification is-danger">{{ error.messageKey|trans(error.messageData, 'security') }}</div>
             {% endif %}
 
+            {# Affichage des messages flash #}
+            {% include 'includes/flash_message.html.twig' %}
+
             {# formulaire de connexion #}
             <form method="post">
                 <div class="field">

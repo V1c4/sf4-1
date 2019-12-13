@@ -1,0 +1,41 @@
+{% extends "_template.html.twig" %}
+
+{% block title %}
+    Inscription
+{% endblock %}
+
+{% block content %}
+    <div class="columns is-centered section">
+        <div class="column is-one-third box">
+            <h1 class="title has-text-primary has-text-centered">
+                Inscription
+            </h1>
+
+            {{ form_start(register_form) }}
+                {{ form_row(register_form.email, {
+                    label: 'Votre adresse email'
+                }) }}
+
+                {{ form_row(register_form.pseudo, {
+                    label: 'Votre pseudo'
+                }) }}
+
+                {#
+                    le champ plainPassword est un RepeatedType (champ en double, à répéter)
+                    pour afficher chaque input, on peut utiliser champ.first & champ.second
+                #}
+                {{ form_row(register_form.plainPassword.first, {
+                    label: 'Mot de passe'
+                }) }}
+
+                {{ form_row(register_form.plainPassword.second, {
+                    label: 'Répétez le mot de passe'
+                }) }}
+
+                <button class="button is-primary is-fullwidth" type="submit">
+                    S'inscrire
+                </button>
+            {{ form_end(register_form) }}
+        </div>
+    </div>
+{% endblock %}

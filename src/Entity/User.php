@@ -77,6 +77,11 @@ class User implements UserInterface
      */
     public function prePersist()
     {
+        // Si le statut isConfirmed n'est pas défini: mettre à false
+        if ($this->isConfirmed === null) {
+            $this->setIsConfirmed(false);
+        }
+
         // Définir un jeton s'il n'y en a pas
         if ($this->securityToken === null) {
             $this->renewToken();
