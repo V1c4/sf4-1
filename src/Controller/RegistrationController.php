@@ -7,6 +7,7 @@ namespace App\Controller;
 
 
 use App\Entity\User;
+use App\Form\PasswordResetFormType;
 use App\Form\UsernameFormType;
 use App\Form\UserRegistrationFormType;
 use App\Repository\UserRepository;
@@ -164,5 +165,103 @@ class RegistrationController extends AbstractController
         ;
         // Envoi de l'email
         $mailer->send($email);
+    }
+
+    /**
+     * Demander un lien de réinitialisation du mot de passe
+     * @Route("/lost-password", name="lost_password")
+     *
+     * @param Request         $request          Pour le formulaire
+     * @param UserRepository  $userRepository   Pour rechercher l'utilisateur
+     * @param MailerInterface $mailer           Pour envoyer l'email de réinitialisation
+     */
+    public function lostPassword(Request $request, UserRepository $userRepository, MailerInterface $mailer)
+    {
+        // Création d'un formulaire demandant un email/pseudo
+        $usernameForm = $this->createForm(UsernameFormType::class);
+        $usernameForm->handleRequest($request);
+
+        if ($usernameForm->isSubmitted() && $usernameForm->isValid()) {
+            $username = $usernameForm->getData()['username'];
+
+            // Récupérer un utilisateur par email ou pseudo
+            // Note: vous pouviez choisir de récupérer par seulement l'email ou seulement le pseudo
+            $user = $userRepository->findOneBy(['email' => $username])
+                ?? $userRepository->findOneBy(['pseudo' => $username]);
+
+            if ($user === null) {
+                $this->addFlash('danger', 'Utilisateur inconnu');
+
+            } else {
+                // Création de l'email de réinitialisation
+                $email = (new TemplatedEmail())
+                    ->from('no-reply@kritik.fr')
+                    ->to($user->getEmail())
+                    ->subject('Réinitialisation du mot de passe | KRITIK')
+                    /*
+                     * Indiquer le template de l'email puis les variables nécessaires
+                     */
+                    ->htmlTemplate('emails/password_reset.html.twig')
+                    ->context([
+                        'user' => $user
+                    ])
+                ;
+                // Envoi de l'email
+                $mailer->send($email);
+
+                $this->addFlash('info', 'Un email de réinitialisation vous a été renvoyé.');
+                return $this->redirectToRoute('app_login');
+            }
+        }
+
+        return $this->render('registration/lost_password.html.twig', [
+            'username_form' => $usernameForm->createView()
+        ]);
+    }
+
+    /**
+     * Réinitialiser le mot de passe
+     * @Route("/reset-password/{id}/{token}", name="reset_password")
+     *
+     * @param User                          $user            L'utilisateur qui souhaite réinitialiser son mot de passe
+     * @param                               $token           Le jeton à vérifier pour la réinitialisation
+     * @param Request                       $request         Pour le formulaire de réinitialisation
+     * @param EntityManagerInterface        $entityManager   Pour mettre à jour l'utilisateur
+     * @param UserPasswordEncoderInterface $passwordEncoder Pour hasher le nouveau mot de passe
+     */
+    public function resetPassword(
+        User $user,
+        $token,
+        Request $request,
+        EntityManagerInterface $entityManager,
+        UserPasswordEncoderInterface $passwordEncoder
+    ) {
+        // Le jeton ne correspond pas à celui de l'utilisateur
+        if ($user->getSecurityToken() !== $token) {
+            $this->addFlash('danger', 'Le jeton de sécurité est invalide.');
+            return $this->redirectToRoute('app_login');
+        }
+
+        // Création du formulaire de réinitialisation du mot de passe
+        $resetForm = $this->createForm(PasswordResetFormType::class);
+        $resetForm->handleRequest($request);
+
+        if ($resetForm->isSubmitted() && $resetForm->isValid()) {
+            $password = $resetForm->getData()['plainPassword'];
+
+            // Mettre à jour l'utilisateur
+            $user->setPassword($passwordEncoder->encodePassword($user, $password));
+            $user->renewToken();
+
+            $entityManager->persist($user);
+            $entityManager->flush();
+
+            $this->addFlash('success', 'Votre mot de passe a été mis à jour.');
+            return $this->redirectToRoute('app_login');
+        }
+
+        return $this->render('registration/reset_password.html.twig', [
+            'reset_form' => $resetForm->createView()
+        ]);
     }
 }
