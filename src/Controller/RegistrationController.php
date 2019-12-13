@@ -1,4 +1,6 @@
-<?php /** @noinspection PhpDocMissingReturnTagInspection */
+<?php /** @noinspection PhpDocMissingThrowsInspection */
+
+/** @noinspection PhpDocMissingReturnTagInspection */
 
 
 namespace App\Controller;
@@ -7,8 +9,10 @@ namespace App\Controller;
 use App\Entity\User;
 use App\Form\UserRegistrationFormType;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bridge\Twig\Mime\TemplatedEmail;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Core\Encoder\UserPasswordEncoderInterface;
 
@@ -21,13 +25,13 @@ class RegistrationController extends AbstractController
      * @param Request                      $request         Pour que le formulaire récupère les données POST
      * @param UserPasswordEncoderInterface $passwordEncoder Pour hasher le mot de passe de l'utilisateur
      * @param EntityManagerInterface       $entityManager   Pour enregistrer l'utilisateur en base de données
-     *
-     * @return \Symfony\Component\HttpFoundation\Response
+     * @param MailerInterface              $mailer          Pour envoyer un email de confirmation
      */
     public function register(
         Request $request,
         UserPasswordEncoderInterface $passwordEncoder,
-        EntityManagerInterface $entityManager
+        EntityManagerInterface $entityManager,
+        MailerInterface $mailer
     ) {
         $registerForm = $this->createForm(UserRegistrationFormType::class);
         $registerForm->handleRequest($request);
@@ -47,6 +51,22 @@ class RegistrationController extends AbstractController
             $entityManager->persist($user);
             $entityManager->flush();
 
+            // Création de l'email de confirmation
+            $email = (new TemplatedEmail())
+                ->from('no-reply@kritik.fr')
+                ->to($user->getEmail())
+                ->subject('Confirmation du compte | KRITIK')
+                /*
+                 * Indiquer le template de l'email puis les variables nécessaires
+                 */
+                ->htmlTemplate('emails/confirmation.html.twig')
+                ->context([
+                    'user' => $user
+                ])
+            ;
+            // Envoi de l'email
+            $mailer->send($email);
+
             // Ajouter un message de succès et rediriger vers la page de connexion
             $this->addFlash('success', 'Vous êtes bien inscrit !');
             $this->addFlash('info', 'Vous devrez confirmez votre compte, un lien vous a été envoyé par email.');
@@ -56,5 +76,16 @@ class RegistrationController extends AbstractController
         return $this->render('registration/register.html.twig', [
             'register_form' => $registerForm->createView()
         ]);
+    }
+
+    /**
+     * @Route("/user-confirmation/{id}/{token}", name="user_confirmation")
+     *
+     * @param User $user    L'utilisateur qui tente de confirmer son compte
+     * @param      $token   Le jeton à vérifier pour confirmer le compte
+     */
+    public function confirmAccount(User $user, $token)
+    {
+        dd($user, $token);
     }
 }
