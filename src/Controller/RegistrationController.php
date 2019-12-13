@@ -7,7 +7,9 @@ namespace App\Controller;
 
 
 use App\Entity\User;
+use App\Form\UsernameFormType;
 use App\Form\UserRegistrationFormType;
+use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -51,21 +53,8 @@ class RegistrationController extends AbstractController
             $entityManager->persist($user);
             $entityManager->flush();
 
-            // Création de l'email de confirmation
-            $email = (new TemplatedEmail())
-                ->from('no-reply@kritik.fr')
-                ->to($user->getEmail())
-                ->subject('Confirmation du compte | KRITIK')
-                /*
-                 * Indiquer le template de l'email puis les variables nécessaires
-                 */
-                ->htmlTemplate('emails/confirmation.html.twig')
-                ->context([
-                    'user' => $user
-                ])
-            ;
-            // Envoi de l'email
-            $mailer->send($email);
+            // Envoi de l'email (voir plus bas la méthode sendConfirmationEmail() )
+            $this->sendConfirmationEmail($mailer, $user);
 
             // Ajouter un message de succès et rediriger vers la page de connexion
             $this->addFlash('success', 'Vous êtes bien inscrit !');
@@ -79,6 +68,7 @@ class RegistrationController extends AbstractController
     }
 
     /**
+     * Confirmation du compte après inscription (lien envoyé par email)
      * @Route("/user-confirmation/{id}/{token}", name="user_confirmation")
      *
      * @param User                   $user          L'utilisateur qui tente de confirmer son compte
@@ -108,5 +98,71 @@ class RegistrationController extends AbstractController
 
         $this->addFlash('success', 'Votre compte est confirmé, vous pouvez vous connecter.');
         return $this->redirectToRoute('app_login');
+    }
+
+    /**
+     * Demander un renvoi du mail de confirmation
+     * @Route("/send-confirmation", name="send_confirmation")
+     *
+     * @param Request         $request          Pour le formulaire
+     * @param UserRepository  $userRepository   Pour rechercher l'utilisateur
+     * @param MailerInterface $mailer           Pour renvoyer l'email de confirmation
+     */
+    public function sendConfirmation(Request $request, UserRepository $userRepository, MailerInterface $mailer)
+    {
+        // Création d'un formulaire demandant un email/pseudo
+        $usernameForm = $this->createForm(UsernameFormType::class);
+        $usernameForm->handleRequest($request);
+
+        if ($usernameForm->isSubmitted() && $usernameForm->isValid()) {
+            $username = $usernameForm->getData()['username'];
+
+            // Récupérer un utilisateur par email ou pseudo
+            // Note: vous pouviez choisir de récupérer par seulement l'email ou seulement le pseudo
+            $user = $userRepository->findOneBy(['email' => $username])
+                ?? $userRepository->findOneBy(['pseudo' => $username]);
+
+            if ($user === null) {
+                $this->addFlash('danger', 'Utilisateur inconnu');
+
+            } elseif ($user->getIsConfirmed()) {
+                $this->addFlash('warning', 'Votre compte est déjà confirmé.');
+                return $this->redirectToRoute('app_login');
+
+            } else {
+                // Renvoi de l'email (voir plus bas la méthode sendConfirmationEmail() )
+                $this->sendConfirmationEmail($mailer, $user);
+                $this->addFlash('info', 'Un email de confirmation vous a été renvoyé.');
+                return $this->redirectToRoute('app_login');
+            }
+        }
+
+        return $this->render('registration/send_confirmation.html.twig', [
+            'username_form' => $usernameForm->createView()
+        ]);
+    }
+
+    /**
+     * Code de l'envoi d'email de confirmation
+     * Le code a été refactorisé en une méthode
+     * car il est le même dans les méthodes register() & sendConfirmation()
+     */
+    private function sendConfirmationEmail(MailerInterface $mailer, User $user)
+    {
+        // Création de l'email de confirmation
+        $email = (new TemplatedEmail())
+            ->from('no-reply@kritik.fr')
+            ->to($user->getEmail())
+            ->subject('Confirmation du compte | KRITIK')
+            /*
+             * Indiquer le template de l'email puis les variables nécessaires
+             */
+            ->htmlTemplate('emails/confirmation.html.twig')
+            ->context([
+                'user' => $user
+            ])
+        ;
+        // Envoi de l'email
+        $mailer->send($email);
     }
 }
