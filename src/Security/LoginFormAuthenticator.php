@@ -96,6 +96,12 @@ class LoginFormAuthenticator extends AbstractFormLoginAuthenticator implements P
      */
     public function checkCredentials($credentials, UserInterface $user)
     {
+        // Le compte n'est pas encore confirmé
+        /** @var User $user */
+        if (!$user->getIsConfirmed()) {
+            throw new CustomUserMessageAuthenticationException('Vous devez confirmer votre compte avant de pouvoir vous connecter');
+        }
+
         // booléen = mot de passe valide ?
         $validation = $this->passwordEncoder->isPasswordValid($user, $credentials['password']);
 
